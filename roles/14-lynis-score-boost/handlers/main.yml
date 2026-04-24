@@ -1,0 +1,21 @@
+# Role 14: Lynis Score Booster — Handlers
+---
+- name: Restart sshd for score boost
+  ansible.builtin.service:
+    name: "{{ hardening_ssh_service_name[ansible_facts['os_family']] | default('sshd') }}"
+    state: restarted
+
+- name: Restart postfix
+  ansible.builtin.service:
+    name: postfix
+    state: restarted
+  ignore_errors: yes
+
+- name: Reload systemd for score boost
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Restart rsyslog
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted

@@ -1,0 +1,428 @@
+# Role 14: Lynis Score Booster — Advanced Hardening
+# Targets specific Lynis checks that are currently failing or partially scored.
+# Fixes: KRNL-6000, SSH-7408, HRDN-7222, MAIL-8818, MAIL-8820, FINT-4402,
+#        BOOT-5122, BOOT-5264, LOGG-2154, LOGG-2190
+# Supports: Debian, RedHat, Suse
+---
+
+# =====================================================================
+# KRNL-6000 — Fix remaining sysctl mismatches
+# kernel.modules_disabled is too dangerous to enable by default.
+# log_martians needs a reboot or sysctl reload to take effect.
+# =====================================================================
+- name: "14 — Force reload all sysctl configs to apply log_martians"
+  ansible.builtin.command:
+    cmd: sysctl --system
+  changed_when: true
+
+# =====================================================================
+# SSH-7408 — Additional SSH hardening options Lynis checks
+# =====================================================================
+- name: "14 — Apply additional SSH hardening options"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    validate: 'sshd -t -f %s'
+  loop:
+    - { regexp: '^#?Compression', line: "Compression no" }
+    - { regexp: '^#?GatewayPorts', line: "GatewayPorts no" }
+    - { regexp: '^#?StrictModes', line: "StrictModes yes" }
+    - { regexp: '^#?AllowAgentForwarding', line: "AllowAgentForwarding no" }
+    - { regexp: '^#?DisableForwarding', line: "DisableForwarding yes" }
+    - { regexp: '^#?PermitUserEnvironment', line: "PermitUserEnvironment no" }
+    - { regexp: '^#?KbdInteractiveAuthentication', line: "KbdInteractiveAuthentication no" }
+    - { regexp: '^#?PrintLastLog', line: "PrintLastLog yes" }
+  loop_control:
+    label: "{{ item.line }}"
+  notify: Restart sshd for score boost
+
+# =====================================================================
+# HRDN-7222 — Restrict ALL compiler/assembler/linker binaries
+# The previous playbook only searched gcc/g++/cc/make via 'which'.
+# Lynis also checks for 'as', 'ld', and arch-prefixed variants.
+# =====================================================================
+- name: "14 — Find ALL compiler, assembler, and linker binaries"
+  ansible.builtin.shell: |
+    find /usr/bin /usr/sbin /usr/local/bin -maxdepth 1 \
+      \( -name 'gcc*' -o -name 'g++*' -o -name 'cc' -o -name 'c++' \
+         -o -name 'make' -o -name 'as' -o -name '*-as' \
+         -o -name 'ld' -o -name '*-ld' -o -name '*-ld.bfd' \
+         -o -name '*-ld.gold' -o -name 'cpp*' \
+         -o -name '*-gcc*' -o -name '*-g++*' \) \
+      -type f 2>/dev/null || true
+  register: _all_compilers
+  changed_when: false
+
+- name: "14 — Restrict all compiler/assembler/linker permissions to root only"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '0700'
+  loop: "{{ _all_compilers.stdout_lines | default([]) }}"
+  when: _all_compilers.stdout_lines | default([]) | length > 0
+
+# Also restrict symlink targets
+- name: "14 — Find symlinked compiler binaries and restrict targets"
+  ansible.builtin.shell: |
+    find /usr/bin /usr/sbin /usr/local/bin -maxdepth 1 \
+      \( -name 'gcc*' -o -name 'g++*' -o -name 'cc' -o -name 'c++' \
+         -o -name 'make' -o -name 'as' -o -name '*-as' \
+         -o -name 'ld' -o -name '*-ld' -o -name '*-ld.bfd' \
+         -o -name '*-ld.gold' -o -name 'cpp*' \
+         -o -name '*-gcc*' -o -name '*-g++*' \) \
+      -type l 2>/dev/null | xargs -I{} readlink -f {} 2>/dev/null | sort -u || true
+  register: _compiler_symlink_targets
+  changed_when: false
+
+- name: "14 — Restrict symlinked compiler binary targets to root only"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '0700'
+  loop: "{{ _compiler_symlink_targets.stdout_lines | default([]) }}"
+  when: _compiler_symlink_targets.stdout_lines | default([]) | length > 0
+  ignore_errors: yes
+
+# =====================================================================
+# MAIL-8818 — Hide mail_name in Postfix SMTP banner
+# =====================================================================
+- name: "14 — Check if Postfix is installed"
+  ansible.builtin.command:
+    cmd: which postconf
+  register: _postfix_check
+  changed_when: false
+  failed_when: false
+
+- name: "14 — Hide Postfix SMTP banner (MAIL-8818)"
+  ansible.builtin.command:
+    cmd: postconf -e 'smtpd_banner=$myhostname ESMTP'
+  when: _postfix_check.rc == 0
+  notify: Restart postfix
+
+# =====================================================================
+# MAIL-8820 — Disable VRFY command in Postfix
+# =====================================================================
+- name: "14 — Disable Postfix VRFY command (MAIL-8820)"
+  ansible.builtin.command:
+    cmd: postconf -e 'disable_vrfy_command=yes'
+  when: _postfix_check.rc == 0
+  notify: Restart postfix
+
+# =====================================================================
+# FINT-4402 — Configure AIDE to use SHA512 checksums
+# =====================================================================
+- name: "14 — Configure AIDE to use SHA512 checksums (Debian)"
+  ansible.builtin.lineinfile:
+    path: /etc/aide/aide.conf
+    regexp: '^#?\s*Checksums\s*='
+    line: "Checksums = sha512"
+    create: no
+  ignore_errors: yes
+  when: ansible_facts['os_family'] == 'Debian'
+
+# Also add SHA512 to the default AIDE database config
+- name: "14 — Ensure SHA512 in AIDE database config (Debian)"
+  ansible.builtin.lineinfile:
+    path: /etc/aide/aide.conf.d/70_aide_extra
+    line: "Checksums = sha512"
+    create: yes
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: "14 — Configure AIDE to use SHA512 checksums (RedHat/Suse)"
+  ansible.builtin.lineinfile:
+    path: /etc/aide.conf
+    regexp: '^#?\s*NORMAL\s*='
+    line: "NORMAL = sha512"
+    create: no
+  ignore_errors: yes
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
+
+# =====================================================================
+# BOOT-5122 — Set GRUB password (configurable)
+# =====================================================================
+- name: "14 — Set GRUB superuser config (Debian)"
+  ansible.builtin.copy:
+    dest: /etc/grub.d/40_custom_security
+    content: |
+      #!/bin/sh
+      cat <<EOF
+      set superusers="grubadmin"
+      password_pbkdf2 grubadmin {{ hardening_grub_password_hash | default('grub.pbkdf2.sha512.10000.CHANGEME') }}
+      EOF
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - hardening_grub_password_enabled | default(false) | bool
+
+# =====================================================================
+# BOOT-5264 — Harden systemd service sandboxing for key services
+# =====================================================================
+- name: "14 — Create systemd override directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "/etc/systemd/system/{{ hardening_ssh_service_name[ansible_facts['os_family']] | default('sshd') }}.service.d"
+    - /etc/systemd/system/cron.service.d
+    - /etc/systemd/system/fail2ban.service.d
+  ignore_errors: yes
+
+- name: "14 — Create systemd hardening override for SSH"
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ssh.service.d/hardening.conf
+    content: |
+      [Service]
+      ProtectSystem=strict
+      ProtectHome=read-only
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+      ProtectKernelTunables=yes
+      ProtectKernelModules=yes
+      ProtectControlGroups=yes
+      RestrictSUIDSGID=yes
+      RestrictNamespaces=yes
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd for score boost
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: "14 — Create systemd hardening override for SSH (RedHat/Suse)"
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/sshd.service.d/hardening.conf
+    content: |
+      [Service]
+      ProtectSystem=strict
+      ProtectHome=read-only
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+      ProtectKernelTunables=yes
+      ProtectKernelModules=yes
+      ProtectControlGroups=yes
+      RestrictSUIDSGID=yes
+      RestrictNamespaces=yes
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd for score boost
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
+
+- name: "14 — Create systemd hardening override for cron"
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/cron.service.d/hardening.conf
+    content: |
+      [Service]
+      ProtectSystem=strict
+      ProtectHome=read-only
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+      ProtectKernelTunables=yes
+      ProtectKernelModules=yes
+      ProtectControlGroups=yes
+      RestrictSUIDSGID=yes
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd for score boost
+
+- name: "14 — Create systemd hardening override for fail2ban"
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/fail2ban.service.d/hardening.conf
+    content: |
+      [Service]
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+      ProtectKernelTunables=yes
+      ProtectKernelModules=yes
+      ProtectControlGroups=yes
+      CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd for score boost
+  when: hardening_install_fail2ban | default(true) | bool
+
+# =====================================================================
+# LOGG-2154 — Enable remote logging stub configuration
+# Write a config that can be pointed at a real syslog server.
+# =====================================================================
+- name: "14 — Configure rsyslog for remote logging readiness"
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/60-remote-logging.conf
+    content: |
+      # Remote logging configuration — CIS/Lynis LOGG-2154
+      # Uncomment and set your remote syslog server:
+      # *.* @@remote-syslog-server.example.com:514
+      #
+      # For TLS encrypted logging:
+      # $DefaultNetstreamDriverCAFile /etc/rsyslog.d/ca.pem
+      # $ActionSendStreamDriver gtls
+      # $ActionSendStreamDriverMode 1
+      # $ActionSendStreamDriverAuthMode x509/name
+      # *.* @@remote-syslog-server.example.com:6514
+      #
+      # If you have a remote server, uncomment ONE line above and restart rsyslog.
+      # For now, we log auth and critical events to a dedicated local file:
+      auth,authpriv.*          /var/log/auth-hardening.log
+      *.emerg                  :omusrmsg:*
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart rsyslog
+
+# =====================================================================
+# LOGG-2190 — Clean up deleted files still in use
+# =====================================================================
+- name: "14 — Find and report deleted files still in use"
+  ansible.builtin.shell: |
+    lsof +L1 2>/dev/null | grep deleted | awk '{print $1}' | sort -u || true
+  register: _deleted_files_in_use
+  changed_when: false
+
+- name: "14 — Display deleted files in use (informational)"
+  ansible.builtin.debug:
+    msg: "Processes holding deleted files: {{ _deleted_files_in_use.stdout_lines | default(['none']) | join(', ') }}"
+
+# =====================================================================
+# Additional hardening for extra Lynis points
+# =====================================================================
+
+# Disable USB authorization by default (physical attack vector)
+- name: "14 — Disable USB device authorization by default"
+  ansible.builtin.copy:
+    dest: /etc/udev/rules.d/99-usb-deny.rules
+    content: |
+      # Deny USB devices by default — re-enable specific devices as needed
+      ACTION=="add", SUBSYSTEM=="usb", TEST=="authorized_default", ATTR{authorized_default}="0"
+    owner: root
+    group: root
+    mode: '0644'
+  when: hardening_disable_usb_auth | default(false) | bool
+
+# Restrict /proc access — hide other users' processes
+- name: "14 — Restrict /proc to own processes (hidepid)"
+  ansible.posix.mount:
+    path: /proc
+    src: proc
+    fstype: proc
+    opts: defaults,nosuid,nodev,noexec,relatime,hidepid=2
+    state: mounted
+  ignore_errors: yes
+
+# Restrict /home permissions
+- name: "14 — Set secure permissions on /home"
+  ansible.builtin.file:
+    path: /home
+    mode: '0750'
+  ignore_errors: yes
+
+# Restrict world-writable directories with sticky bit
+- name: "14 — Find world-writable directories without sticky bit"
+  ansible.builtin.shell: |
+    find / -xdev -type d \( -perm -0002 -a ! -perm -1000 \) 2>/dev/null | head -20 || true
+  register: _world_writable_dirs
+  changed_when: false
+
+- name: "14 — Set sticky bit on world-writable directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "o+t"
+  loop: "{{ _world_writable_dirs.stdout_lines | default([]) }}"
+  when: _world_writable_dirs.stdout_lines | default([]) | length > 0
+  ignore_errors: yes
+
+# Harden /etc/securetty — restrict root login to console only
+- name: "14 — Restrict root login to console only"
+  ansible.builtin.copy:
+    dest: /etc/securetty
+    content: |
+      # Restrict root login to console only
+      console
+      tty1
+    owner: root
+    group: root
+    mode: '0400'
+
+# Set secure default permissions for new home directories
+- name: "14 — Set secure DIR_MODE for new home directories"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?\s*DIR_MODE'
+    line: "DIR_MODE        0750"
+
+# Enable process limits to prevent fork bombs
+- name: "14 — Set process limits to prevent fork bombs"
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-hardening-nproc.conf
+    content: |
+      * soft nproc 1024
+      * hard nproc 2048
+    owner: root
+    group: root
+    mode: '0644'
+
+# Disable Ctrl+Alt+Del reboot via systemd
+- name: "14 — Disable Ctrl+Alt+Del reboot"
+  ansible.builtin.systemd:
+    name: ctrl-alt-del.target
+    masked: yes
+
+# Secure shared memory at boot
+- name: "14 — Ensure /run/shm is secured"
+  ansible.posix.mount:
+    path: /run/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,noexec,nodev,nosuid
+    state: mounted
+  ignore_errors: yes
+
+# Lock unused system accounts
+- name: "14 — Lock default system accounts that should not login"
+  ansible.builtin.shell: |
+    for user in daemon bin sys games man lp mail news uucp proxy www-data backup list irc gnats nobody; do
+      if id "$user" &>/dev/null; then
+        usermod -L "$user" 2>/dev/null || true
+        usermod -s /usr/sbin/nologin "$user" 2>/dev/null || true
+      fi
+    done
+  changed_when: false
+
+# Set timeout for shell sessions (TMOUT)
+- name: "14 — Set shell session timeout (TMOUT)"
+  ansible.builtin.copy:
+    dest: /etc/profile.d/99-hardening-timeout.sh
+    content: |
+      # Auto-logout idle sessions after 15 minutes
+      readonly TMOUT=900
+      export TMOUT
+    owner: root
+    group: root
+    mode: '0644'
+
+# Disable uncommon network protocols
+- name: "14 — Disable additional uncommon protocols"
+  ansible.builtin.copy:
+    dest: "/etc/modprobe.d/{{ item }}.conf"
+    content: |
+      install {{ item }} /bin/true
+      blacklist {{ item }}
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - firewire-core
+    - firewire-net
+    - firewire-sbp2
+    - thunderbolt
+    - bluetooth

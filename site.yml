@@ -66,6 +66,10 @@
       when: hardening_additional_enabled | bool
       tags: [additional]
 
+    - role: 14-lynis-score-boost
+      when: hardening_score_boost_enabled | bool
+      tags: [scoreboost]
+
   post_tasks:
     - name: Display hardening completion message
       ansible.builtin.debug:

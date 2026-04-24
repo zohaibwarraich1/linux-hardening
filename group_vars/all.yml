@@ -20,6 +20,7 @@ hardening_file_integrity_enabled: true
 hardening_malware_scanner_enabled: true
 hardening_banners_enabled: true
 hardening_additional_enabled: true
+hardening_score_boost_enabled: true
 
 # ============================================================
 # Distro-Aware Mappings (auto-selected via ansible_os_family)
