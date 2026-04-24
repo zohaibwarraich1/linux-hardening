@@ -1,12 +1,28 @@
 # Role 08: Audit & Logging — Fixes ACCT-9628
 # Installs and configures auditd with comprehensive CIS rules.
+# Supports: Debian, RedHat, Suse
 ---
-- name: "08 — Install auditd and audispd-plugins"
+- name: "08 — Install auditd and plugins (Debian)"
   ansible.builtin.apt:
     name:
       - auditd
       - audispd-plugins
     state: present
+  when: ansible_os_family == 'Debian'
+
+- name: "08 — Install auditd and plugins (RedHat)"
+  ansible.builtin.dnf:
+    name:
+      - audit
+      - audit-libs
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: "08 — Install auditd (Suse)"
+  community.general.zypper:
+    name: audit
+    state: present
+  when: ansible_os_family == 'Suse'
 
 - name: "08 — Configure auditd.conf"
   ansible.builtin.lineinfile:
@@ -39,7 +55,7 @@
 
 # Ensure rsyslog is installed and running
 - name: "08 — Install rsyslog"
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: rsyslog
     state: present
 

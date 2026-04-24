@@ -1,5 +1,6 @@
 # Role 06: Authentication Hardening
 # Fixes AUTH-9230, AUTH-9262, AUTH-9328 — password policy, umask, PAM.
+# Supports: Debian, RedHat, Suse (distro-aware PAM paths and package names)
 ---
 # Password hashing — AUTH-9230
 - name: "06 — Set password encryption method to SHA512"
@@ -46,10 +47,10 @@
     regexp: '^PASS_WARN_AGE'
     line: "PASS_WARN_AGE   {{ hardening_password_warn_days }}"
 
-# PAM password quality — AUTH-9262
-- name: "06 — Install libpam-pwquality"
-  ansible.builtin.apt:
-    name: libpam-pwquality
+# PAM password quality — AUTH-9262 (distro-aware package name)
+- name: "06 — Install pam_pwquality"
+  ansible.builtin.package:
+    name: "{{ hardening_pkg_pwquality[ansible_os_family] | default('libpam-pwquality') }}"
     state: present
 
 - name: "06 — Configure pam_pwquality settings"
@@ -68,20 +69,35 @@
     group: root
     mode: '0644'
 
-# Ensure pam_pwquality is enabled in PAM
-- name: "06 — Enable pam_pwquality in common-password"
+# Ensure pam_pwquality is enabled in PAM (distro-aware PAM path)
+- name: "06 — Enable pam_pwquality in PAM password config"
   ansible.builtin.lineinfile:
-    path: /etc/pam.d/common-password
+    path: "{{ hardening_pam_password_file[ansible_os_family] | default('/etc/pam.d/common-password') }}"
     regexp: '^password.*pam_pwquality\.so'
     line: "password        requisite                       pam_pwquality.so retry={{ hardening_pwquality_retry }}"
     insertbefore: '^password.*pam_unix\.so'
 
-# Password remember — prevent reuse
-- name: "06 — Set password remember in PAM"
+# Password remember — prevent reuse (Debian-specific PAM line format)
+- name: "06 — Set password remember in PAM (Debian)"
   ansible.builtin.lineinfile:
     path: /etc/pam.d/common-password
     regexp: '^password.*pam_unix\.so'
     line: "password        [success=1 default=ignore]      pam_unix.so obscure use_authtok try_first_pass yescrypt remember={{ hardening_password_remember }}"
+  when: ansible_os_family == 'Debian'
+
+- name: "06 — Set password remember in PAM (RedHat)"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/system-auth
+    regexp: '^password.*pam_unix\.so'
+    line: "password    sufficient    pam_unix.so sha512 shadow try_first_pass use_authtok remember={{ hardening_password_remember }}"
+  when: ansible_os_family == 'RedHat'
+
+- name: "06 — Set password remember in PAM (Suse)"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/common-password
+    regexp: '^password.*pam_unix\.so'
+    line: "password        requisite       pam_unix.so use_authtok nullok shadow try_first_pass remember={{ hardening_password_remember }}"
+  when: ansible_os_family == 'Suse'
 
 # Cron access control
 - name: "06 — Create /etc/cron.allow"

@@ -1,29 +1,32 @@
 # Role 13: Additional Hardening
 # Process accounting, sysstat, fail2ban, security packages, service cleanup.
+# Supports: Debian, RedHat, Suse
 ---
 # ===== Process Accounting — ACCT-9622 =====
-- name: "13 — Install process accounting (acct)"
-  ansible.builtin.apt:
-    name: acct
+- name: "13 — Install process accounting"
+  ansible.builtin.package:
+    name: "{{ hardening_pkg_accounting[ansible_os_family] | default('acct') }}"
     state: present
 
 - name: "13 — Enable process accounting service"
   ansible.builtin.service:
-    name: acct
+    name: "{{ (ansible_os_family == 'RedHat') | ternary('psacct', 'acct') }}"
     state: started
     enabled: yes
+  ignore_errors: yes
 
 # ===== sysstat — ACCT-9626 =====
 - name: "13 — Install sysstat"
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: sysstat
     state: present
 
-- name: "13 — Enable sysstat data collection"
+- name: "13 — Enable sysstat data collection (Debian)"
   ansible.builtin.lineinfile:
     path: /etc/default/sysstat
     regexp: '^ENABLED='
     line: 'ENABLED="true"'
+  when: ansible_os_family == 'Debian'
 
 - name: "13 — Enable sysstat service"
   ansible.builtin.service:
@@ -31,8 +34,8 @@
     state: started
     enabled: yes
 
-# ===== Security packages =====
-- name: "13 — Install security packages"
+# ===== Security packages (Debian-specific) =====
+- name: "13 — Install Debian-specific security packages"
   ansible.builtin.apt:
     name:
       - debsums             # PKGS-7370
@@ -41,17 +44,29 @@
       - needrestart         # Best practice
     state: present
   ignore_errors: yes
+  when: ansible_os_family == 'Debian'
 
-# apt-listbugs — DEB-0810
-- name: "13 — Install apt-listbugs"
+# apt-listbugs — DEB-0810 (Debian only)
+- name: "13 — Install apt-listbugs (Debian)"
   ansible.builtin.apt:
     name: apt-listbugs
     state: present
   ignore_errors: yes
+  when: ansible_os_family == 'Debian'
+
+# RedHat-specific security packages
+- name: "13 — Install RedHat security packages"
+  ansible.builtin.dnf:
+    name:
+      - dnf-plugin-post-transaction-actions
+      - yum-utils
+    state: present
+  ignore_errors: yes
+  when: ansible_os_family == 'RedHat'
 
 # ===== fail2ban — DEB-0880 =====
-- name: "13 — Install and configure fail2ban"
-  ansible.builtin.apt:
+- name: "13 — Install fail2ban"
+  ansible.builtin.package:
     name: fail2ban
     state: present
   when: hardening_install_fail2ban | bool
@@ -95,7 +110,7 @@
   ignore_errors: yes
 
 # ===== Remove insecure packages =====
-- name: "13 — Remove insecure packages"
+- name: "13 — Remove insecure packages (Debian)"
   ansible.builtin.apt:
     name:
       - telnet
@@ -104,6 +119,28 @@
       - nis
     state: absent
   ignore_errors: yes
+  when: ansible_os_family == 'Debian'
+
+- name: "13 — Remove insecure packages (RedHat)"
+  ansible.builtin.dnf:
+    name:
+      - telnet
+      - rsh
+      - talk
+      - ypbind
+    state: absent
+  ignore_errors: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: "13 — Remove insecure packages (Suse)"
+  community.general.zypper:
+    name:
+      - telnet
+      - rsh
+      - talk
+    state: absent
+  ignore_errors: yes
+  when: ansible_os_family == 'Suse'
 
 # ===== FQDN in /etc/hosts — NAME-4404 =====
 - name: "13 — Ensure FQDN is in /etc/hosts"
@@ -135,7 +172,7 @@
   ignore_errors: yes
 
 # ===== Restrict su access =====
-- name: "13 — Restrict su to sudo group"
+- name: "13 — Restrict su to sudo/wheel group"
   ansible.builtin.lineinfile:
     path: /etc/pam.d/su
     regexp: '^#?\s*auth\s+required\s+pam_wheel\.so'
@@ -162,13 +199,10 @@
     label: "{{ item.path }}"
   ignore_errors: yes
 
-# ===== Disable USB storage if already blacklisted =====
-# This is handled by filesystem role
-
 # ===== Ensure time synchronization =====
-- name: "13 — Ensure systemd-timesyncd is running"
+- name: "13 — Ensure time synchronization is running"
   ansible.builtin.service:
-    name: systemd-timesyncd
+    name: "{{ (ansible_os_family == 'RedHat') | ternary('chronyd', 'systemd-timesyncd') }}"
     state: started
     enabled: yes
   ignore_errors: yes

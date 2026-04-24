@@ -1,5 +1,6 @@
 # Role 03: Filesystem Hardening
 # Disables unused filesystems, secures mount points, restricts core dumps.
+# Supports: All Linux distros (Debian, RedHat, Suse)
 ---
 # 1.1.1 - Disable unused filesystems via modprobe
 - name: "03 — Disable unused kernel modules (filesystems)"
@@ -45,10 +46,10 @@
     state: mounted
   when: hardening_secure_dev_shm | bool
 
-# Bootloader security
+# Bootloader security — distro-aware GRUB path
 - name: "03 — Set permissions on bootloader config"
   ansible.builtin.file:
-    path: /boot/grub/grub.cfg
+    path: "{{ hardening_grub_cfg_path[ansible_os_family] | default('/boot/grub/grub.cfg') }}"
     owner: root
     group: root
     mode: '0400'

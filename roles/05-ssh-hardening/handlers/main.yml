@@ -1,6 +1,7 @@
 # Role 05: SSH Hardening — Handlers
+# Distro-aware: uses dynamic service name (ssh on Debian, sshd on RedHat/Suse)
 ---
 - name: Restart sshd
   ansible.builtin.service:
-    name: ssh
+    name: "{{ hardening_ssh_service_name[ansible_os_family] | default('sshd') }}"
     state: restarted

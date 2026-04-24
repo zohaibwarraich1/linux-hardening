@@ -1,6 +1,0 @@
-# roles/cis-access/handlers/main.yml
----
-- name: Restart sshd
-  ansible.builtin.service:
-    name: sshd
-    state: restarted

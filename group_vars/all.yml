@@ -1,7 +1,7 @@
 # group_vars/all.yml — Master Configuration for Linux Hardening
 # ============================================================
 # All settings are configurable. Toggle roles on/off, adjust thresholds.
-# Refer to CIS Benchmark v2.0.0 for Ubuntu 24.04 and Lynis default.prf.
+# Supports: Debian/Ubuntu, RHEL/CentOS/Fedora/Rocky/Alma, SUSE/openSUSE
 ---
 
 # ============================================================
@@ -20,6 +20,74 @@ hardening_file_integrity_enabled: true
 hardening_malware_scanner_enabled: true
 hardening_banners_enabled: true
 hardening_additional_enabled: true
+
+# ============================================================
+# Distro-Aware Mappings (auto-selected via ansible_os_family)
+# ============================================================
+
+# --- Package name mappings ---
+# Packages that have different names across distro families.
+# Usage in tasks: {{ _pkg_name_map[ansible_os_family] | default(_pkg_name_map['Debian']) }}
+hardening_pkg_pwquality:
+  Debian: libpam-pwquality
+  RedHat: libpwquality
+  Suse: libpwquality
+
+hardening_pkg_accounting:
+  Debian: acct
+  RedHat: psacct
+  Suse: acct
+
+hardening_pkg_audit_plugins:
+  Debian: audispd-plugins
+  RedHat: audispd-plugins
+  Suse: audit
+
+# --- PAM file path mappings ---
+hardening_pam_password_file:
+  Debian: /etc/pam.d/common-password
+  RedHat: /etc/pam.d/system-auth
+  Suse: /etc/pam.d/common-password
+
+# --- SSH service name mappings ---
+hardening_ssh_service_name:
+  Debian: ssh
+  RedHat: sshd
+  Suse: sshd
+
+# --- GRUB config path mappings ---
+hardening_grub_cfg_path:
+  Debian: /boot/grub/grub.cfg
+  RedHat: /boot/grub2/grub.cfg
+  Suse: /boot/grub2/grub.cfg
+
+# --- Default config dir mappings ---
+# Debian uses /etc/default/, RedHat uses /etc/sysconfig/
+hardening_defaults_dir:
+  Debian: /etc/default
+  RedHat: /etc/sysconfig
+  Suse: /etc/sysconfig
+
+# --- AIDE initialization command mappings ---
+hardening_aide_init_cmd:
+  Debian: aideinit
+  RedHat: "aide --init"
+  Suse: "aide --init"
+
+hardening_aide_db_new_path:
+  Debian: /var/lib/aide/aide.db.new
+  RedHat: /var/lib/aide/aide.db.new.gz
+  Suse: /var/lib/aide/aide.db.new.gz
+
+hardening_aide_db_path:
+  Debian: /var/lib/aide/aide.db
+  RedHat: /var/lib/aide/aide.db.gz
+  Suse: /var/lib/aide/aide.db.gz
+
+hardening_aide_config_path:
+  Debian: /etc/aide/aide.conf
+  RedHat: /etc/aide.conf
+  Suse: /etc/aide.conf
 
 # ============================================================
 # 01 — System Updates
@@ -153,15 +221,23 @@ hardening_cron_allow_users:
   - root
 
 # ============================================================
-# 07 — Firewall (UFW)
+# 07 — Firewall
 # ============================================================
+# --- UFW settings (Debian/Ubuntu) ---
 hardening_ufw_default_incoming: "deny"
 hardening_ufw_default_outgoing: "allow"
 hardening_ufw_enable_logging: true
 
-# Allowed incoming ports (list of {port, proto} dicts)
 hardening_ufw_allowed_ports:
   - { port: "{{ hardening_ssh_port }}", proto: "tcp", comment: "SSH" }
+
+# --- firewalld settings (RHEL/CentOS/SUSE) ---
+hardening_firewalld_default_zone: "drop"
+hardening_firewalld_allowed_services:
+  - ssh
+hardening_firewalld_allowed_ports:
+  - "{{ hardening_ssh_port }}/tcp"
+hardening_firewalld_enable_logging: true
 
 # ============================================================
 # 08 — Audit & Logging
@@ -173,9 +249,13 @@ hardening_auditd_admin_space_left_action: halt
 hardening_auditd_buffer_size: 8192
 
 # ============================================================
-# 09 — AppArmor
+# 09 — AppArmor / SELinux (MAC)
 # ============================================================
+# AppArmor is used on Debian/Ubuntu, SELinux on RHEL/CentOS/SUSE.
+# The role auto-detects which to apply based on ansible_os_family.
 hardening_apparmor_enforce_all: true
+hardening_selinux_state: enforcing    # enforcing, permissive, or disabled
+hardening_selinux_policy: targeted    # targeted, minimum, or mls
 
 # ============================================================
 # 10 — File Integrity (AIDE)
@@ -206,7 +286,7 @@ hardening_banner_text: |
 # ============================================================
 # 13 — Additional Hardening
 # ============================================================
-# Services to disable
+# Services to disable (names are generally the same cross-distro)
 hardening_disabled_services:
   - avahi-daemon
   - cups

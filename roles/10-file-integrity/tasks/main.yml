@@ -1,24 +1,37 @@
 # Role 10: File Integrity (AIDE) — Fixes FINT-4350
 # Installs AIDE for file integrity monitoring.
+# Supports: Debian (aideinit), RedHat/Suse (aide --init)
 ---
 - name: "10 — Install AIDE"
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: aide
     state: present
   register: aide_installed
 
-- name: "10 — Initialize AIDE database (first run only)"
+- name: "10 — Initialize AIDE database — Debian (first run only)"
   ansible.builtin.command:
     cmd: aideinit
-    creates: /var/lib/aide/aide.db
-  when: aide_installed.changed
+    creates: "{{ hardening_aide_db_path[ansible_os_family] | default('/var/lib/aide/aide.db') }}"
+  when:
+    - aide_installed.changed
+    - ansible_os_family == 'Debian'
+  async: 600
+  poll: 30
+
+- name: "10 — Initialize AIDE database — RedHat/Suse (first run only)"
+  ansible.builtin.command:
+    cmd: aide --init
+    creates: "{{ hardening_aide_db_new_path[ansible_os_family] | default('/var/lib/aide/aide.db.new.gz') }}"
+  when:
+    - aide_installed.changed
+    - ansible_os_family in ['RedHat', 'Suse']
   async: 600
   poll: 30
 
 - name: "10 — Copy new AIDE database to active location"
   ansible.builtin.copy:
-    src: /var/lib/aide/aide.db.new
-    dest: /var/lib/aide/aide.db
+    src: "{{ hardening_aide_db_new_path[ansible_os_family] | default('/var/lib/aide/aide.db.new') }}"
+    dest: "{{ hardening_aide_db_path[ansible_os_family] | default('/var/lib/aide/aide.db') }}"
     remote_src: yes
     owner: root
     group: root
@@ -35,7 +48,7 @@
     month: "{{ hardening_aide_cron_schedule.split(' ')[3] }}"
     weekday: "{{ hardening_aide_cron_schedule.split(' ')[4] }}"
     user: root
-    job: "/usr/bin/aide.wrapper --check --config /etc/aide/aide.conf > /var/log/aide/aide-check.log 2>&1"
+    job: "/usr/sbin/aide --check --config {{ hardening_aide_config_path[ansible_os_family] | default('/etc/aide/aide.conf') }} > /var/log/aide/aide-check.log 2>&1"
     state: present
 
 - name: "10 — Create AIDE log directory"
