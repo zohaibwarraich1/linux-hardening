@@ -22,6 +22,9 @@ hardening_banners_enabled: true
 hardening_additional_enabled: true
 hardening_score_boost_enabled: true
 
+hardening_install_pkg_integrity: true
+hardening_install_accounting: true
+
 # ============================================================
 # Distro-Aware Mappings (auto-selected via ansible_os_family)
 # ============================================================
@@ -120,6 +123,8 @@ hardening_sysctl_params:
   kernel.sysrq: 0
   kernel.unprivileged_bpf_disabled: 1
   kernel.yama.ptrace_scope: 2
+  kernel.kexec_load_disabled: 1
+  kernel.core_pattern: "|/bin/false"
   # BPF hardening
   net.core.bpf_jit_harden: 2
 
@@ -189,6 +194,7 @@ hardening_ssh_login_grace_time: 60
 hardening_ssh_permit_root_login: "no"
 hardening_ssh_permit_empty_passwords: "no"
 hardening_ssh_x11_forwarding: "no"
+# DevOps Note: Set to "yes" if your DevOps pipelines (e.g. Ansible, Jenkins) require tunneling/agent forwarding.
 hardening_ssh_allow_tcp_forwarding: "no"
 hardening_ssh_allow_agent_forwarding: "no"
 hardening_ssh_tcp_keep_alive: "no"

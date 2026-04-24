@@ -323,7 +323,7 @@
 - name: "14 — Set secure permissions on /home"
   ansible.builtin.file:
     path: /home
-    mode: '0750'
+    mode: '0755'
   ignore_errors: yes
 
 # Restrict world-writable directories with sticky bit
@@ -426,3 +426,54 @@
     - firewire-sbp2
     - thunderbolt
     - bluetooth
+
+# =====================================================================
+# Additional tasks for Lynis Score Boost (>90%)
+# =====================================================================
+
+# PKGS-7392 — Install package integrity tools (Debian/Ubuntu)
+- name: "14 — Install package integrity tools (Debian)"
+  ansible.builtin.package:
+    name:
+      - debsums
+      - apt-show-versions
+    state: present
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - hardening_install_pkg_integrity | default(true) | bool
+
+# ACCT-9622 / ACCT-9626 — Process accounting
+- name: "14 — Install process accounting tools"
+  ansible.builtin.package:
+    name:
+      - "{{ hardening_pkg_accounting[ansible_facts['os_family']] | default('acct') }}"
+      - sysstat
+    state: present
+  when: hardening_install_accounting | default(true) | bool
+
+- name: "14 — Enable process accounting and sysstat"
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  loop:
+    - "{{ hardening_pkg_accounting[ansible_facts['os_family']] | default('acct') }}"
+    - sysstat
+  when: hardening_install_accounting | default(true) | bool
+  ignore_errors: yes
+
+# BANN-7126 / BANN-7130 — Warning Banners
+- name: "14 — Configure /etc/issue banner"
+  ansible.builtin.copy:
+    dest: /etc/issue
+    content: "{{ hardening_banner_text }}\n"
+    owner: root
+    group: root
+    mode: '0644'
+  when: hardening_banners_enabled | default(true) | bool
+
+- name: "14 — Ensure time synchronization daemon is installed"
+  ansible.builtin.package:
+    name: "{{ 'systemd-timesyncd' if ansible_facts['os_family'] == 'Debian' else 'chrony' }}"
+    state: present
+  ignore_errors: yes
