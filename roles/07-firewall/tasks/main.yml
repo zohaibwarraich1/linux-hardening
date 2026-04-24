@@ -7,19 +7,19 @@
   ansible.builtin.apt:
     name: ufw
     state: present
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "07 — Set UFW default incoming policy to deny"
   community.general.ufw:
     default: "{{ hardening_ufw_default_incoming }}"
     direction: incoming
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "07 — Set UFW default outgoing policy to allow"
   community.general.ufw:
     default: "{{ hardening_ufw_default_outgoing }}"
     direction: outgoing
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "07 — Allow configured ports through UFW"
   community.general.ufw:
@@ -30,33 +30,33 @@
   loop: "{{ hardening_ufw_allowed_ports }}"
   loop_control:
     label: "{{ item.comment | default(item.port) }}"
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "07 — Enable UFW logging"
   community.general.ufw:
     logging: 'on'
   when:
-    - ansible_os_family == 'Debian'
+    - ansible_facts['os_family'] == 'Debian'
     - hardening_ufw_enable_logging | bool
 
 - name: "07 — Enable UFW"
   community.general.ufw:
     state: enabled
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 # ===== RHEL/CentOS/Fedora/SUSE — firewalld =====
 - name: "07 — Install firewalld (RedHat/Suse)"
   ansible.builtin.package:
     name: firewalld
     state: present
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "07 — Ensure firewalld is started and enabled"
   ansible.builtin.service:
     name: firewalld
     state: started
     enabled: yes
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "07 — Set firewalld default zone"
   ansible.builtin.command:
@@ -66,7 +66,7 @@
   failed_when:
     - _fw_zone_result.rc != 0
     - "'ZONE_ALREADY_SET' not in _fw_zone_result.stderr"
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "07 — Allow configured services through firewalld"
   ansible.posix.firewalld:
@@ -75,7 +75,7 @@
     immediate: yes
     state: enabled
   loop: "{{ hardening_firewalld_allowed_services }}"
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "07 — Allow configured ports through firewalld"
   ansible.posix.firewalld:
@@ -84,12 +84,12 @@
     immediate: yes
     state: enabled
   loop: "{{ hardening_firewalld_allowed_ports }}"
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "07 — Enable firewalld logging"
   ansible.builtin.command:
     cmd: "firewall-cmd --set-log-denied=all"
   changed_when: true
   when:
-    - ansible_os_family in ['RedHat', 'Suse']
+    - ansible_facts['os_family'] in ['RedHat', 'Suse']
     - hardening_firewalld_enable_logging | bool

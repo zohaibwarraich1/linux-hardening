@@ -12,21 +12,21 @@
       - apparmor-profiles
       - apparmor-profiles-extra
     state: present
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "09 — Ensure AppArmor service is enabled and started (Debian)"
   ansible.builtin.service:
     name: apparmor
     state: started
     enabled: yes
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "09 — Enforce all AppArmor profiles (Debian)"
   ansible.builtin.shell: |
     aa-enforce /etc/apparmor.d/* 2>/dev/null || true
   changed_when: false
   when:
-    - ansible_os_family == 'Debian'
+    - ansible_facts['os_family'] == 'Debian'
     - hardening_apparmor_enforce_all | bool
 
 # ===== RHEL/CentOS/Fedora/SUSE — SELinux =====
@@ -40,7 +40,7 @@
       - selinux-policy
       - selinux-policy-targeted
     state: present
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: "09 — Install SELinux management tools (Suse)"
   community.general.zypper:
@@ -49,7 +49,7 @@
       - policycoreutils
       - selinux-policy
     state: present
-  when: ansible_os_family == 'Suse'
+  when: ansible_facts['os_family'] == 'Suse'
   ignore_errors: yes
 
 - name: "09 — Set SELinux to enforcing in config"
@@ -57,14 +57,14 @@
     path: /etc/selinux/config
     regexp: '^SELINUX='
     line: "SELINUX={{ hardening_selinux_state }}"
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "09 — Set SELinux policy type"
   ansible.builtin.lineinfile:
     path: /etc/selinux/config
     regexp: '^SELINUXTYPE='
     line: "SELINUXTYPE={{ hardening_selinux_policy }}"
-  when: ansible_os_family in ['RedHat', 'Suse']
+  when: ansible_facts['os_family'] in ['RedHat', 'Suse']
 
 - name: "09 — Enable SELinux enforcing at runtime (no reboot)"
   ansible.builtin.command:
@@ -72,5 +72,5 @@
   changed_when: true
   failed_when: false
   when:
-    - ansible_os_family in ['RedHat', 'Suse']
+    - ansible_facts['os_family'] in ['RedHat', 'Suse']
     - hardening_selinux_state == 'enforcing'

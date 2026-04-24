@@ -5,12 +5,12 @@
 # ===== Process Accounting — ACCT-9622 =====
 - name: "13 — Install process accounting"
   ansible.builtin.package:
-    name: "{{ hardening_pkg_accounting[ansible_os_family] | default('acct') }}"
+    name: "{{ hardening_pkg_accounting[ansible_facts['os_family']] | default('acct') }}"
     state: present
 
 - name: "13 — Enable process accounting service"
   ansible.builtin.service:
-    name: "{{ (ansible_os_family == 'RedHat') | ternary('psacct', 'acct') }}"
+    name: "{{ (ansible_facts['os_family'] == 'RedHat') | ternary('psacct', 'acct') }}"
     state: started
     enabled: yes
   ignore_errors: yes
@@ -26,7 +26,7 @@
     path: /etc/default/sysstat
     regexp: '^ENABLED='
     line: 'ENABLED="true"'
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "13 — Enable sysstat service"
   ansible.builtin.service:
@@ -44,7 +44,7 @@
       - needrestart         # Best practice
     state: present
   ignore_errors: yes
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 # apt-listbugs — DEB-0810 (Debian only)
 - name: "13 — Install apt-listbugs (Debian)"
@@ -52,7 +52,7 @@
     name: apt-listbugs
     state: present
   ignore_errors: yes
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 # RedHat-specific security packages
 - name: "13 — Install RedHat security packages"
@@ -62,7 +62,7 @@
       - yum-utils
     state: present
   ignore_errors: yes
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 # ===== fail2ban — DEB-0880 =====
 - name: "13 — Install fail2ban"
@@ -119,7 +119,7 @@
       - nis
     state: absent
   ignore_errors: yes
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "13 — Remove insecure packages (RedHat)"
   ansible.builtin.dnf:
@@ -130,7 +130,7 @@
       - ypbind
     state: absent
   ignore_errors: yes
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: "13 — Remove insecure packages (Suse)"
   community.general.zypper:
@@ -140,16 +140,16 @@
       - talk
     state: absent
   ignore_errors: yes
-  when: ansible_os_family == 'Suse'
+  when: ansible_facts['os_family'] == 'Suse'
 
 # ===== FQDN in /etc/hosts — NAME-4404 =====
 - name: "13 — Ensure FQDN is in /etc/hosts"
   ansible.builtin.lineinfile:
     path: /etc/hosts
     regexp: '^127\.0\.1\.1'
-    line: "127.0.1.1 {{ ansible_fqdn }} {{ ansible_hostname }}"
+    line: "127.0.1.1 {{ ansible_facts['fqdn'] }} {{ ansible_facts['hostname'] }}"
     state: present
-  when: ansible_fqdn is defined and ansible_fqdn != ""
+  when: ansible_facts['fqdn'] is defined and ansible_facts['fqdn'] != ""
 
 # ===== Restrict compiler permissions — HRDN-7222 =====
 - name: "13 — Find compilers on the system"
@@ -202,7 +202,7 @@
 # ===== Ensure time synchronization =====
 - name: "13 — Ensure time synchronization is running"
   ansible.builtin.service:
-    name: "{{ (ansible_os_family == 'RedHat') | ternary('chronyd', 'systemd-timesyncd') }}"
+    name: "{{ (ansible_facts['os_family'] == 'RedHat') | ternary('chronyd', 'systemd-timesyncd') }}"
     state: started
     enabled: yes
   ignore_errors: yes

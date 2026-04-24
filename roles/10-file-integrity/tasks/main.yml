@@ -11,27 +11,27 @@
 - name: "10 — Initialize AIDE database — Debian (first run only)"
   ansible.builtin.command:
     cmd: aideinit
-    creates: "{{ hardening_aide_db_path[ansible_os_family] | default('/var/lib/aide/aide.db') }}"
+    creates: "{{ hardening_aide_db_path[ansible_facts['os_family']] | default('/var/lib/aide/aide.db') }}"
   when:
     - aide_installed.changed
-    - ansible_os_family == 'Debian'
+    - ansible_facts['os_family'] == 'Debian'
   async: 600
   poll: 30
 
 - name: "10 — Initialize AIDE database — RedHat/Suse (first run only)"
   ansible.builtin.command:
     cmd: aide --init
-    creates: "{{ hardening_aide_db_new_path[ansible_os_family] | default('/var/lib/aide/aide.db.new.gz') }}"
+    creates: "{{ hardening_aide_db_new_path[ansible_facts['os_family']] | default('/var/lib/aide/aide.db.new.gz') }}"
   when:
     - aide_installed.changed
-    - ansible_os_family in ['RedHat', 'Suse']
+    - ansible_facts['os_family'] in ['RedHat', 'Suse']
   async: 600
   poll: 30
 
 - name: "10 — Copy new AIDE database to active location"
   ansible.builtin.copy:
-    src: "{{ hardening_aide_db_new_path[ansible_os_family] | default('/var/lib/aide/aide.db.new') }}"
-    dest: "{{ hardening_aide_db_path[ansible_os_family] | default('/var/lib/aide/aide.db') }}"
+    src: "{{ hardening_aide_db_new_path[ansible_facts['os_family']] | default('/var/lib/aide/aide.db.new') }}"
+    dest: "{{ hardening_aide_db_path[ansible_facts['os_family']] | default('/var/lib/aide/aide.db') }}"
     remote_src: yes
     owner: root
     group: root
@@ -48,7 +48,7 @@
     month: "{{ hardening_aide_cron_schedule.split(' ')[3] }}"
     weekday: "{{ hardening_aide_cron_schedule.split(' ')[4] }}"
     user: root
-    job: "/usr/sbin/aide --check --config {{ hardening_aide_config_path[ansible_os_family] | default('/etc/aide/aide.conf') }} > /var/log/aide/aide-check.log 2>&1"
+    job: "/usr/sbin/aide --check --config {{ hardening_aide_config_path[ansible_facts['os_family']] | default('/etc/aide/aide.conf') }} > /var/log/aide/aide-check.log 2>&1"
     state: present
 
 - name: "10 — Create AIDE log directory"

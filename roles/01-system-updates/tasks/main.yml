@@ -12,7 +12,7 @@
     state: present
     update_cache: yes
     cache_valid_time: 3600
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "01 — Enable automatic security updates (Debian)"
   ansible.builtin.copy:
@@ -25,21 +25,21 @@
     owner: root
     group: root
     mode: '0644'
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 - name: "01 — Ensure unattended-upgrades service is enabled (Debian)"
   ansible.builtin.service:
     name: unattended-upgrades
     state: started
     enabled: yes
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
 
 # ===== RHEL/CentOS/Fedora — dnf-automatic =====
 - name: "01 — Install dnf-automatic (RedHat)"
   ansible.builtin.dnf:
     name: dnf-automatic
     state: present
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: "01 — Configure dnf-automatic for security updates (RedHat)"
   ansible.builtin.lineinfile:
@@ -51,18 +51,18 @@
     - { regexp: '^upgrade_type', line: 'upgrade_type = security' }
   loop_control:
     label: "{{ item.line }}"
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: "01 — Enable dnf-automatic timer (RedHat)"
   ansible.builtin.service:
     name: dnf-automatic.timer
     state: started
     enabled: yes
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 # ===== SUSE — zypper automatic patches =====
 - name: "01 — Install yast2-online-update-configuration (Suse)"
   community.general.zypper:
     name: yast2-online-update-configuration
     state: present
-  when: ansible_os_family == 'Suse'
+  when: ansible_facts['os_family'] == 'Suse'

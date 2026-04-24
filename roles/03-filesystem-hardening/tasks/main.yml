@@ -49,7 +49,7 @@
 # Bootloader security — distro-aware GRUB path
 - name: "03 — Set permissions on bootloader config"
   ansible.builtin.file:
-    path: "{{ hardening_grub_cfg_path[ansible_os_family] | default('/boot/grub/grub.cfg') }}"
+    path: "{{ hardening_grub_cfg_path[ansible_facts['os_family']] | default('/boot/grub/grub.cfg') }}"
     owner: root
     group: root
     mode: '0400'
