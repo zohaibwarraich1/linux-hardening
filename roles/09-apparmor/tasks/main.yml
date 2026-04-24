@@ -1,0 +1,23 @@
+# Role 09: AppArmor
+# Ensures AppArmor is active and all profiles are enforced.
+---
+- name: "09 — Install AppArmor packages"
+  ansible.builtin.apt:
+    name:
+      - apparmor
+      - apparmor-utils
+      - apparmor-profiles
+      - apparmor-profiles-extra
+    state: present
+
+- name: "09 — Ensure AppArmor service is enabled and started"
+  ansible.builtin.service:
+    name: apparmor
+    state: started
+    enabled: yes
+
+- name: "09 — Enforce all AppArmor profiles"
+  ansible.builtin.shell: |
+    aa-enforce /etc/apparmor.d/* 2>/dev/null || true
+  changed_when: false
+  when: hardening_apparmor_enforce_all | bool

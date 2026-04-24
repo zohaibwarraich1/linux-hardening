@@ -1,0 +1,18 @@
+# Role 12: Banners — Fixes BANN-7126, BANN-7130
+# Deploys legal warning banners to /etc/issue and /etc/issue.net.
+---
+- name: "12 — Deploy legal banner to /etc/issue (BANN-7126)"
+  ansible.builtin.template:
+    src: issue.j2
+    dest: /etc/issue
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: "12 — Deploy legal banner to /etc/issue.net (BANN-7130)"
+  ansible.builtin.template:
+    src: issue.net.j2
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0644'

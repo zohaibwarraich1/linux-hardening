@@ -1,0 +1,24 @@
+# Role 02: Kernel Hardening — Lynis KRNL-6000
+# Sets all sysctl parameters to match Lynis default.prf expected values.
+---
+- name: "02 — Apply kernel sysctl hardening parameters"
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+  loop: "{{ hardening_sysctl_params | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+- name: "02 — Disable kernel module loading (DANGEROUS — opt-in only)"
+  ansible.posix.sysctl:
+    name: kernel.modules_disabled
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+  when: hardening_disable_kernel_modules | bool

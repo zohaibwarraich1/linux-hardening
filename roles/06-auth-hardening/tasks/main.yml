@@ -1,0 +1,135 @@
+# Role 06: Authentication Hardening
+# Fixes AUTH-9230, AUTH-9262, AUTH-9328 — password policy, umask, PAM.
+---
+# Password hashing — AUTH-9230
+- name: "06 — Set password encryption method to SHA512"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?ENCRYPT_METHOD'
+    line: "ENCRYPT_METHOD {{ hardening_encrypt_method }}"
+
+- name: "06 — Set SHA512 minimum hashing rounds"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?SHA_CRYPT_MIN_ROUNDS'
+    line: "SHA_CRYPT_MIN_ROUNDS {{ hardening_sha_crypt_min_rounds }}"
+
+- name: "06 — Set SHA512 maximum hashing rounds"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?SHA_CRYPT_MAX_ROUNDS'
+    line: "SHA_CRYPT_MAX_ROUNDS {{ hardening_sha_crypt_max_rounds }}"
+
+# Default umask — AUTH-9328
+- name: "06 — Set restrictive UMASK in login.defs"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^UMASK'
+    line: "UMASK           {{ hardening_umask }}"
+
+# Password aging policy
+- name: "06 — Set password max age"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MAX_DAYS'
+    line: "PASS_MAX_DAYS   {{ hardening_password_max_days }}"
+
+- name: "06 — Set password min age"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_DAYS'
+    line: "PASS_MIN_DAYS   {{ hardening_password_min_days }}"
+
+- name: "06 — Set password warning age"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_WARN_AGE'
+    line: "PASS_WARN_AGE   {{ hardening_password_warn_days }}"
+
+# PAM password quality — AUTH-9262
+- name: "06 — Install libpam-pwquality"
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+
+- name: "06 — Configure pam_pwquality settings"
+  ansible.builtin.copy:
+    dest: /etc/security/pwquality.conf
+    content: |
+      # Password quality requirements — CIS Benchmark
+      minlen = {{ hardening_pwquality_minlen }}
+      dcredit = {{ hardening_pwquality_dcredit }}
+      ucredit = {{ hardening_pwquality_ucredit }}
+      lcredit = {{ hardening_pwquality_lcredit }}
+      ocredit = {{ hardening_pwquality_ocredit }}
+      retry = {{ hardening_pwquality_retry }}
+      enforce_for_root
+    owner: root
+    group: root
+    mode: '0644'
+
+# Ensure pam_pwquality is enabled in PAM
+- name: "06 — Enable pam_pwquality in common-password"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/common-password
+    regexp: '^password.*pam_pwquality\.so'
+    line: "password        requisite                       pam_pwquality.so retry={{ hardening_pwquality_retry }}"
+    insertbefore: '^password.*pam_unix\.so'
+
+# Password remember — prevent reuse
+- name: "06 — Set password remember in PAM"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/common-password
+    regexp: '^password.*pam_unix\.so'
+    line: "password        [success=1 default=ignore]      pam_unix.so obscure use_authtok try_first_pass yescrypt remember={{ hardening_password_remember }}"
+
+# Cron access control
+- name: "06 — Create /etc/cron.allow"
+  ansible.builtin.template:
+    src: cron.allow.j2
+    dest: /etc/cron.allow
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: "06 — Remove /etc/cron.deny"
+  ansible.builtin.file:
+    path: /etc/cron.deny
+    state: absent
+
+# Restrict at access
+- name: "06 — Create /etc/at.allow"
+  ansible.builtin.copy:
+    dest: /etc/at.allow
+    content: |
+      root
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: "06 — Remove /etc/at.deny"
+  ansible.builtin.file:
+    path: /etc/at.deny
+    state: absent
+
+# Secure cron directories
+- name: "06 — Set permissions on cron directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - /etc/cron.d
+    - /etc/cron.daily
+    - /etc/cron.hourly
+    - /etc/cron.weekly
+    - /etc/cron.monthly
+  ignore_errors: yes
+
+- name: "06 — Set permissions on crontab"
+  ansible.builtin.file:
+    path: /etc/crontab
+    owner: root
+    group: root
+    mode: '0600'

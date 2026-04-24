@@ -1,0 +1,29 @@
+# Role 01: System Updates
+# Ensures automatic security updates are configured.
+---
+- name: "01 — Install unattended-upgrades"
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: "01 — Enable automatic security updates"
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: "01 — Ensure unattended-upgrades service is enabled"
+  ansible.builtin.service:
+    name: unattended-upgrades
+    state: started
+    enabled: yes

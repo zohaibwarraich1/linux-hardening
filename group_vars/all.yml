@@ -1,0 +1,234 @@
+# group_vars/all.yml — Master Configuration for Linux Hardening
+# ============================================================
+# All settings are configurable. Toggle roles on/off, adjust thresholds.
+# Refer to CIS Benchmark v2.0.0 for Ubuntu 24.04 and Lynis default.prf.
+---
+
+# ============================================================
+# Role Toggles — enable/disable individual hardening sections
+# ============================================================
+hardening_system_updates_enabled: true
+hardening_kernel_enabled: true
+hardening_filesystem_enabled: true
+hardening_network_enabled: true
+hardening_ssh_enabled: true
+hardening_auth_enabled: true
+hardening_firewall_enabled: true
+hardening_audit_enabled: true
+hardening_apparmor_enabled: true
+hardening_file_integrity_enabled: true
+hardening_malware_scanner_enabled: true
+hardening_banners_enabled: true
+hardening_additional_enabled: true
+
+# ============================================================
+# 01 — System Updates
+# ============================================================
+hardening_enable_unattended_upgrades: true
+
+# ============================================================
+# 02 — Kernel Hardening (sysctl) — Lynis KRNL-6000
+# ============================================================
+# All values matched to Lynis default.prf expected values.
+# WARNING: kernel.modules_disabled=1 prevents loading new modules until reboot.
+hardening_disable_kernel_modules: false  # Set true only if you're sure
+
+hardening_sysctl_params:
+  # Filesystem security
+  dev.tty.ldisc_autoload: 0
+  fs.protected_fifos: 2
+  fs.protected_hardlinks: 1
+  fs.protected_regular: 2
+  fs.protected_symlinks: 1
+  fs.suid_dumpable: 0
+  # Kernel security
+  kernel.core_uses_pid: 1
+  kernel.ctrl-alt-del: 0
+  kernel.dmesg_restrict: 1
+  kernel.kptr_restrict: 2
+  kernel.perf_event_paranoid: 3
+  kernel.randomize_va_space: 2
+  kernel.sysrq: 0
+  kernel.unprivileged_bpf_disabled: 1
+  kernel.yama.ptrace_scope: 2
+  # BPF hardening
+  net.core.bpf_jit_harden: 2
+
+# ============================================================
+# 03 — Filesystem Hardening
+# ============================================================
+# Kernel modules to disable
+hardening_disabled_modules:
+  - cramfs
+  - freevxfs
+  - squashfs
+  - udf
+  - usb-storage
+
+# Mount options for /tmp and /dev/shm
+hardening_secure_tmp: true
+hardening_secure_dev_shm: true
+
+# ============================================================
+# 04 — Network Hardening
+# ============================================================
+hardening_disable_ipv6: false  # Set true to fully disable IPv6
+
+# IPv4 sysctl hardening
+hardening_network_sysctl:
+  net.ipv4.ip_forward: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  net.ipv4.tcp_syncookies: 1
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+
+# IPv6 sysctl hardening (applied even if IPv6 is not fully disabled)
+hardening_network_ipv6_sysctl:
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+
+# Unused network protocols to disable — Lynis NETW-3200
+hardening_disabled_protocols:
+  - dccp
+  - rds
+  - sctp
+  - tipc
+
+# ============================================================
+# 05 — SSH Hardening — Lynis SSH-7408
+# ============================================================
+hardening_ssh_port: 22
+hardening_ssh_log_level: "VERBOSE"
+hardening_ssh_max_auth_tries: 3
+hardening_ssh_max_sessions: 2
+hardening_ssh_client_alive_interval: 300
+hardening_ssh_client_alive_count_max: 2
+hardening_ssh_login_grace_time: 60
+hardening_ssh_permit_root_login: "no"
+hardening_ssh_permit_empty_passwords: "no"
+hardening_ssh_x11_forwarding: "no"
+hardening_ssh_allow_tcp_forwarding: "no"
+hardening_ssh_allow_agent_forwarding: "no"
+hardening_ssh_tcp_keep_alive: "no"
+hardening_ssh_use_pam: "yes"
+hardening_ssh_disable_password_auth: false  # Set true if you use key-only auth
+
+# ============================================================
+# 06 — Authentication Hardening
+# ============================================================
+# Password policy — /etc/login.defs
+hardening_password_max_days: 365
+hardening_password_min_days: 7
+hardening_password_warn_days: 7
+hardening_password_min_length: 14
+hardening_umask: "027"
+hardening_encrypt_method: "SHA512"
+hardening_sha_crypt_min_rounds: 5000
+hardening_sha_crypt_max_rounds: 5000
+hardening_password_remember: 5
+
+# PAM password quality (pam_pwquality)
+hardening_pwquality_minlen: 14
+hardening_pwquality_dcredit: -1
+hardening_pwquality_ucredit: -1
+hardening_pwquality_lcredit: -1
+hardening_pwquality_ocredit: -1
+hardening_pwquality_retry: 3
+
+# Cron access
+hardening_cron_allow_users:
+  - root
+
+# ============================================================
+# 07 — Firewall (UFW)
+# ============================================================
+hardening_ufw_default_incoming: "deny"
+hardening_ufw_default_outgoing: "allow"
+hardening_ufw_enable_logging: true
+
+# Allowed incoming ports (list of {port, proto} dicts)
+hardening_ufw_allowed_ports:
+  - { port: "{{ hardening_ssh_port }}", proto: "tcp", comment: "SSH" }
+
+# ============================================================
+# 08 — Audit & Logging
+# ============================================================
+hardening_auditd_max_log_file: 8            # MB
+hardening_auditd_max_log_file_action: keep_logs
+hardening_auditd_space_left_action: email
+hardening_auditd_admin_space_left_action: halt
+hardening_auditd_buffer_size: 8192
+
+# ============================================================
+# 09 — AppArmor
+# ============================================================
+hardening_apparmor_enforce_all: true
+
+# ============================================================
+# 10 — File Integrity (AIDE)
+# ============================================================
+hardening_aide_cron_schedule: "0 5 * * *"  # Daily at 5 AM
+
+# ============================================================
+# 11 — Malware Scanner (rkhunter)
+# ============================================================
+hardening_rkhunter_cron_schedule: "0 4 * * 0"  # Weekly Sunday 4 AM
+
+# ============================================================
+# 12 — Banners
+# ============================================================
+hardening_banner_text: |
+  ***************************************************************************
+                            AUTHORIZED ACCESS ONLY
+  ***************************************************************************
+  This system is the property of its owner. Access to this computer system
+  is limited to authorized users only. All activities on this system are
+  monitored and recorded. Anyone using this system expressly consents to
+  such monitoring. If monitoring reveals possible evidence of criminal
+  activity, system personnel may provide the evidence to law enforcement.
+  Unauthorized access to this system is prohibited and may be subject to
+  criminal and/or civil penalties.
+  ***************************************************************************
+
+# ============================================================
+# 13 — Additional Hardening
+# ============================================================
+# Services to disable
+hardening_disabled_services:
+  - avahi-daemon
+  - cups
+  - isc-dhcp-server
+  - slapd
+  - nfs-server
+  - rpcbind
+  - vsftpd
+  - apache2
+  - dovecot
+  - smbd
+  - squid
+  - snmpd
+  - nis
+  - rsh-server
+  - talk
+  - telnet
+  - tftp
+  - xinetd
+
+# Install fail2ban
+hardening_install_fail2ban: true
+
+# Restrict compiler permissions (chmod 700)
+hardening_restrict_compilers: true

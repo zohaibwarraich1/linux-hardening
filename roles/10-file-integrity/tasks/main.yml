@@ -1,0 +1,47 @@
+# Role 10: File Integrity (AIDE) — Fixes FINT-4350
+# Installs AIDE for file integrity monitoring.
+---
+- name: "10 — Install AIDE"
+  ansible.builtin.apt:
+    name: aide
+    state: present
+  register: aide_installed
+
+- name: "10 — Initialize AIDE database (first run only)"
+  ansible.builtin.command:
+    cmd: aideinit
+    creates: /var/lib/aide/aide.db
+  when: aide_installed.changed
+  async: 600
+  poll: 30
+
+- name: "10 — Copy new AIDE database to active location"
+  ansible.builtin.copy:
+    src: /var/lib/aide/aide.db.new
+    dest: /var/lib/aide/aide.db
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0600'
+  when: aide_installed.changed
+  ignore_errors: yes
+
+- name: "10 — Set up daily AIDE check cron job"
+  ansible.builtin.cron:
+    name: "AIDE daily integrity check"
+    minute: "{{ hardening_aide_cron_schedule.split(' ')[0] }}"
+    hour: "{{ hardening_aide_cron_schedule.split(' ')[1] }}"
+    day: "{{ hardening_aide_cron_schedule.split(' ')[2] }}"
+    month: "{{ hardening_aide_cron_schedule.split(' ')[3] }}"
+    weekday: "{{ hardening_aide_cron_schedule.split(' ')[4] }}"
+    user: root
+    job: "/usr/bin/aide.wrapper --check --config /etc/aide/aide.conf > /var/log/aide/aide-check.log 2>&1"
+    state: present
+
+- name: "10 — Create AIDE log directory"
+  ansible.builtin.file:
+    path: /var/log/aide
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'

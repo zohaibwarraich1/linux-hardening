@@ -1,0 +1,55 @@
+# Role 04: Network Hardening
+# Hardens IPv4/IPv6 network stack and disables unused protocols.
+---
+# IPv4 network sysctl hardening
+- name: "04 — Apply IPv4 network hardening sysctl parameters"
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-network-hardening.conf
+  loop: "{{ hardening_network_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+# IPv6 hardening (even when IPv6 is not fully disabled)
+- name: "04 — Apply IPv6 network hardening sysctl parameters"
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-network-hardening.conf
+  loop: "{{ hardening_network_ipv6_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+# Fully disable IPv6 if requested
+- name: "04 — Disable IPv6 completely"
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-network-hardening.conf
+  loop:
+    - net.ipv6.conf.all.disable_ipv6
+    - net.ipv6.conf.default.disable_ipv6
+    - net.ipv6.conf.lo.disable_ipv6
+  when: hardening_disable_ipv6 | bool
+
+# Disable unused network protocols — Lynis NETW-3200
+- name: "04 — Disable unused network protocols"
+  ansible.builtin.copy:
+    dest: "/etc/modprobe.d/{{ item }}.conf"
+    content: |
+      install {{ item }} /bin/true
+      blacklist {{ item }}
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ hardening_disabled_protocols }}"

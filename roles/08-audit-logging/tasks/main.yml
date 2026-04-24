@@ -1,0 +1,58 @@
+# Role 08: Audit & Logging — Fixes ACCT-9628
+# Installs and configures auditd with comprehensive CIS rules.
+---
+- name: "08 — Install auditd and audispd-plugins"
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+
+- name: "08 — Configure auditd.conf"
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^max_log_file =', line: "max_log_file = {{ hardening_auditd_max_log_file }}" }
+    - { regexp: '^max_log_file_action =', line: "max_log_file_action = {{ hardening_auditd_max_log_file_action }}" }
+    - { regexp: '^space_left_action =', line: "space_left_action = {{ hardening_auditd_space_left_action }}" }
+    - { regexp: '^admin_space_left_action =', line: "admin_space_left_action = {{ hardening_auditd_admin_space_left_action }}" }
+  loop_control:
+    label: "{{ item.line }}"
+  notify: Restart auditd
+
+- name: "08 — Deploy CIS audit rules"
+  ansible.builtin.copy:
+    src: audit-rules/cis-audit.rules
+    dest: /etc/audit/rules.d/cis-audit.rules
+    owner: root
+    group: root
+    mode: '0640'
+  notify: Load audit rules
+
+- name: "08 — Ensure auditd is enabled and running"
+  ansible.builtin.service:
+    name: auditd
+    state: started
+    enabled: yes
+
+# Ensure rsyslog is installed and running
+- name: "08 — Install rsyslog"
+  ansible.builtin.apt:
+    name: rsyslog
+    state: present
+
+- name: "08 — Enable rsyslog service"
+  ansible.builtin.service:
+    name: rsyslog
+    state: started
+    enabled: yes
+
+# Set log file permissions
+- name: "08 — Set permissions on log directory"
+  ansible.builtin.file:
+    path: /var/log
+    state: directory
+    mode: '0750'
+  ignore_errors: yes

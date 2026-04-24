@@ -1,0 +1,174 @@
+# Role 13: Additional Hardening
+# Process accounting, sysstat, fail2ban, security packages, service cleanup.
+---
+# ===== Process Accounting — ACCT-9622 =====
+- name: "13 — Install process accounting (acct)"
+  ansible.builtin.apt:
+    name: acct
+    state: present
+
+- name: "13 — Enable process accounting service"
+  ansible.builtin.service:
+    name: acct
+    state: started
+    enabled: yes
+
+# ===== sysstat — ACCT-9626 =====
+- name: "13 — Install sysstat"
+  ansible.builtin.apt:
+    name: sysstat
+    state: present
+
+- name: "13 — Enable sysstat data collection"
+  ansible.builtin.lineinfile:
+    path: /etc/default/sysstat
+    regexp: '^ENABLED='
+    line: 'ENABLED="true"'
+
+- name: "13 — Enable sysstat service"
+  ansible.builtin.service:
+    name: sysstat
+    state: started
+    enabled: yes
+
+# ===== Security packages =====
+- name: "13 — Install security packages"
+  ansible.builtin.apt:
+    name:
+      - debsums             # PKGS-7370
+      - apt-show-versions   # PKGS-7394
+      - libpam-tmpdir       # DEB-0280
+      - needrestart         # Best practice
+    state: present
+  ignore_errors: yes
+
+# apt-listbugs — DEB-0810
+- name: "13 — Install apt-listbugs"
+  ansible.builtin.apt:
+    name: apt-listbugs
+    state: present
+  ignore_errors: yes
+
+# ===== fail2ban — DEB-0880 =====
+- name: "13 — Install and configure fail2ban"
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+  when: hardening_install_fail2ban | bool
+
+- name: "13 — Create fail2ban local config"
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 3600
+      findtime = 600
+      maxretry = 5
+      backend = systemd
+
+      [sshd]
+      enabled = true
+      port = {{ hardening_ssh_port }}
+      filter = sshd
+      maxretry = 3
+      bantime = 3600
+    owner: root
+    group: root
+    mode: '0644'
+  when: hardening_install_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: "13 — Enable fail2ban service"
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: yes
+  when: hardening_install_fail2ban | bool
+
+# ===== Disable unnecessary services =====
+- name: "13 — Disable unnecessary services"
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop: "{{ hardening_disabled_services }}"
+  ignore_errors: yes
+
+# ===== Remove insecure packages =====
+- name: "13 — Remove insecure packages"
+  ansible.builtin.apt:
+    name:
+      - telnet
+      - rsh-client
+      - talk
+      - nis
+    state: absent
+  ignore_errors: yes
+
+# ===== FQDN in /etc/hosts — NAME-4404 =====
+- name: "13 — Ensure FQDN is in /etc/hosts"
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ ansible_fqdn }} {{ ansible_hostname }}"
+    state: present
+  when: ansible_fqdn is defined and ansible_fqdn != ""
+
+# ===== Restrict compiler permissions — HRDN-7222 =====
+- name: "13 — Find compilers on the system"
+  ansible.builtin.command:
+    cmd: which gcc g++ cc make
+  register: compiler_paths
+  changed_when: false
+  failed_when: false
+  when: hardening_restrict_compilers | bool
+
+- name: "13 — Restrict compiler permissions to root only"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '0700'
+  loop: "{{ compiler_paths.stdout_lines | default([]) }}"
+  when:
+    - hardening_restrict_compilers | bool
+    - compiler_paths.stdout_lines is defined
+    - compiler_paths.stdout_lines | length > 0
+  ignore_errors: yes
+
+# ===== Restrict su access =====
+- name: "13 — Restrict su to sudo group"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so'
+    line: 'auth       required   pam_wheel.so use_uid'
+    state: present
+
+# ===== Secure permissions on sensitive files =====
+- name: "13 — Set secure permissions on passwd/shadow/group files"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: '/etc/passwd', group: 'root', mode: '0644' }
+    - { path: '/etc/passwd-', group: 'root', mode: '0600' }
+    - { path: '/etc/shadow', group: 'shadow', mode: '0640' }
+    - { path: '/etc/shadow-', group: 'shadow', mode: '0600' }
+    - { path: '/etc/group', group: 'root', mode: '0644' }
+    - { path: '/etc/group-', group: 'root', mode: '0600' }
+    - { path: '/etc/gshadow', group: 'shadow', mode: '0640' }
+    - { path: '/etc/gshadow-', group: 'shadow', mode: '0600' }
+  loop_control:
+    label: "{{ item.path }}"
+  ignore_errors: yes
+
+# ===== Disable USB storage if already blacklisted =====
+# This is handled by filesystem role
+
+# ===== Ensure time synchronization =====
+- name: "13 — Ensure systemd-timesyncd is running"
+  ansible.builtin.service:
+    name: systemd-timesyncd
+    state: started
+    enabled: yes
+  ignore_errors: yes

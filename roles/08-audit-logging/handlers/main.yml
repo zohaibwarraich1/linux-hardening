@@ -1,0 +1,11 @@
+# Role 08: Audit & Logging — Handlers
+---
+- name: Restart auditd
+  ansible.builtin.service:
+    name: auditd
+    state: restarted
+
+- name: Load audit rules
+  ansible.builtin.command:
+    cmd: augenrules --load
+  changed_when: true

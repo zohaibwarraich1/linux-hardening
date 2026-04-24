@@ -1,0 +1,75 @@
+# site.yml — Master Hardening Playbook
+# ======================================
+# Applies all hardening roles in proper dependency order.
+# Each role can be toggled on/off via group_vars/all.yml.
+#
+# Usage:
+#   ansible-playbook site.yml -i inventory/hosts.ini
+#   ansible-playbook site.yml -i inventory/hosts.ini --check  (dry run)
+#   ansible-playbook site.yml -i inventory/hosts.ini --tags ssh  (single role)
+---
+- name: Linux System Hardening — CIS Benchmark + Lynis Optimized
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: 01-system-updates
+      when: hardening_system_updates_enabled | bool
+      tags: [updates]
+
+    - role: 02-kernel-hardening
+      when: hardening_kernel_enabled | bool
+      tags: [kernel]
+
+    - role: 03-filesystem-hardening
+      when: hardening_filesystem_enabled | bool
+      tags: [filesystem]
+
+    - role: 04-network-hardening
+      when: hardening_network_enabled | bool
+      tags: [network]
+
+    - role: 05-ssh-hardening
+      when: hardening_ssh_enabled | bool
+      tags: [ssh]
+
+    - role: 06-auth-hardening
+      when: hardening_auth_enabled | bool
+      tags: [auth]
+
+    - role: 07-firewall
+      when: hardening_firewall_enabled | bool
+      tags: [firewall]
+
+    - role: 08-audit-logging
+      when: hardening_audit_enabled | bool
+      tags: [audit]
+
+    - role: 09-apparmor
+      when: hardening_apparmor_enabled | bool
+      tags: [apparmor]
+
+    - role: 10-file-integrity
+      when: hardening_file_integrity_enabled | bool
+      tags: [integrity]
+
+    - role: 11-malware-scanner
+      when: hardening_malware_scanner_enabled | bool
+      tags: [malware]
+
+    - role: 12-banners
+      when: hardening_banners_enabled | bool
+      tags: [banners]
+
+    - role: 13-additional-hardening
+      when: hardening_additional_enabled | bool
+      tags: [additional]
+
+  post_tasks:
+    - name: Display hardening completion message
+      ansible.builtin.debug:
+        msg: >
+          Hardening complete! Run 'sudo lynis audit system' to verify your
+          hardening index. Target score: 80+/100.
+      tags: [always]

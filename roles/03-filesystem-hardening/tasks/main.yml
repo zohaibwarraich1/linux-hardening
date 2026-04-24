@@ -1,0 +1,86 @@
+# Role 03: Filesystem Hardening
+# Disables unused filesystems, secures mount points, restricts core dumps.
+---
+# 1.1.1 - Disable unused filesystems via modprobe
+- name: "03 — Disable unused kernel modules (filesystems)"
+  ansible.builtin.copy:
+    dest: "/etc/modprobe.d/{{ item }}.conf"
+    content: |
+      install {{ item }} /bin/true
+      blacklist {{ item }}
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ hardening_disabled_modules }}"
+
+# Secure /tmp with tmpfs (nodev, nosuid, noexec)
+- name: "03 — Create systemd override directory for tmp.mount"
+  ansible.builtin.file:
+    path: /etc/systemd/system/tmp.mount.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: hardening_secure_tmp | bool
+
+- name: "03 — Configure /tmp mount with security options"
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tmp.mount.d/options.conf
+    content: |
+      [Mount]
+      Options=mode=1777,strictatime,noexec,nodev,nosuid
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
+  when: hardening_secure_tmp | bool
+
+# Secure /dev/shm
+- name: "03 — Secure /dev/shm mount options"
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,noexec,nodev,nosuid
+    state: mounted
+  when: hardening_secure_dev_shm | bool
+
+# Bootloader security
+- name: "03 — Set permissions on bootloader config"
+  ansible.builtin.file:
+    path: /boot/grub/grub.cfg
+    owner: root
+    group: root
+    mode: '0400'
+  ignore_errors: yes
+
+# Core dump restrictions
+- name: "03 — Restrict core dumps via limits.conf"
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-hardening-coredump.conf
+    content: |
+      * hard core 0
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: "03 — Disable core dumps via sysctl"
+  ansible.posix.sysctl:
+    name: fs.suid_dumpable
+    value: '0'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+# Disable coredump via systemd
+- name: "03 — Disable systemd coredump storage"
+  ansible.builtin.copy:
+    dest: /etc/systemd/coredump.conf.d/hardening.conf
+    content: |
+      [Coredump]
+      Storage=none
+      ProcessSizeMax=0
+    owner: root
+    group: root
+    mode: '0644'
+  ignore_errors: yes
