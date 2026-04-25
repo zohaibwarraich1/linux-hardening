@@ -187,7 +187,7 @@ hardening_disabled_protocols:
 hardening_ssh_port: 22
 hardening_ssh_log_level: "VERBOSE"
 hardening_ssh_max_auth_tries: 3
-hardening_ssh_max_sessions: 2
+hardening_ssh_max_sessions: 10
 hardening_ssh_client_alive_interval: 300
 hardening_ssh_client_alive_count_max: 2
 hardening_ssh_login_grace_time: 60
@@ -195,8 +195,8 @@ hardening_ssh_permit_root_login: "no"
 hardening_ssh_permit_empty_passwords: "no"
 hardening_ssh_x11_forwarding: "no"
 # DevOps Note: Set to "yes" if your DevOps pipelines (e.g. Ansible, Jenkins) require tunneling/agent forwarding.
-hardening_ssh_allow_tcp_forwarding: "no"
-hardening_ssh_allow_agent_forwarding: "no"
+hardening_ssh_allow_tcp_forwarding: "yes"
+hardening_ssh_allow_agent_forwarding: "yes"
 hardening_ssh_tcp_keep_alive: "no"
 hardening_ssh_use_pam: "yes"
 hardening_ssh_disable_password_auth: false  # Set true if you use key-only auth
@@ -318,4 +318,7 @@ hardening_disabled_services:
 hardening_install_fail2ban: true
 
 # Restrict compiler permissions (chmod 700)
-hardening_restrict_compilers: true
+hardening_restrict_compilers: false
+
+# Restrict /proc access (hidepid=2). Set false for DevOps monitoring tools.
+hardening_proc_hidepid_enabled: false

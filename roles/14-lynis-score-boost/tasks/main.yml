@@ -29,8 +29,6 @@
     - { regexp: '^#?Compression', line: "Compression no" }
     - { regexp: '^#?GatewayPorts', line: "GatewayPorts no" }
     - { regexp: '^#?StrictModes', line: "StrictModes yes" }
-    - { regexp: '^#?AllowAgentForwarding', line: "AllowAgentForwarding no" }
-    - { regexp: '^#?DisableForwarding', line: "DisableForwarding yes" }
     - { regexp: '^#?PermitUserEnvironment', line: "PermitUserEnvironment no" }
     - { regexp: '^#?KbdInteractiveAuthentication', line: "KbdInteractiveAuthentication no" }
     - { regexp: '^#?PrintLastLog', line: "PrintLastLog yes" }
@@ -54,13 +52,16 @@
       -type f 2>/dev/null || true
   register: _all_compilers
   changed_when: false
+  when: hardening_restrict_compilers | default(false) | bool
 
 - name: "14 — Restrict all compiler/assembler/linker permissions to root only"
   ansible.builtin.file:
     path: "{{ item }}"
     mode: '0700'
   loop: "{{ _all_compilers.stdout_lines | default([]) }}"
-  when: _all_compilers.stdout_lines | default([]) | length > 0
+  when:
+    - hardening_restrict_compilers | default(false) | bool
+    - _all_compilers.stdout_lines | default([]) | length > 0
 
 # Also restrict symlink targets
 - name: "14 — Find symlinked compiler binaries and restrict targets"
@@ -74,13 +75,16 @@
       -type l 2>/dev/null | xargs -I{} readlink -f {} 2>/dev/null | sort -u || true
   register: _compiler_symlink_targets
   changed_when: false
+  when: hardening_restrict_compilers | default(false) | bool
 
 - name: "14 — Restrict symlinked compiler binary targets to root only"
   ansible.builtin.file:
     path: "{{ item }}"
     mode: '0700'
   loop: "{{ _compiler_symlink_targets.stdout_lines | default([]) }}"
-  when: _compiler_symlink_targets.stdout_lines | default([]) | length > 0
+  when:
+    - hardening_restrict_compilers | default(false) | bool
+    - _compiler_symlink_targets.stdout_lines | default([]) | length > 0
   ignore_errors: yes
 
 # =====================================================================
@@ -317,6 +321,7 @@
     fstype: proc
     opts: defaults,nosuid,nodev,noexec,relatime,hidepid=2
     state: mounted
+  when: hardening_proc_hidepid_enabled | default(false) | bool
   ignore_errors: yes
 
 # Restrict /home permissions
